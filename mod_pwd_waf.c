@@ -37,55 +37,36 @@
 **    The sample page from mod_pwd_waf.c
 */ 
 
-#include "httpd.h"
-#include "http_config.h"
-#include "http_protocol.h"
-#include "http_core.h"
-#include "http_request.h"
-
-#include "ap_config.h"
-#include "apr_strings.h"
-#include "apr_network_io.h"
-#include <apr_file_info.h>
-#include <apr_file_io.h>
-#include <apr_tables.h>
-#include "util_script.h"
-
 #include "mod_pwd_waf.h"
 
 /* Web Application Firewall by Team Password */
 static int pwd_waf_handler(request_rec *r)
 {
-    
-    if(strcmp(r->uri,"/fw/tt.php")==0)	{
+    parseConfigFile();
+    ap_rprintf(r," postNum----%d------\n", postNum);
+    ap_rprintf(r," get----%s--%s----\n", postList[0].key, postList[0].value);
+    /* check GET method parameters*/
+    if(getNum > 0)	{
       	// Get
-      	ap_rputs("<H2>", r);
-      	if(checkGETParms(r, NULL, 0)==ILLEGAL){
-			// TODO
+      	if(checkGETParms(r, getList, getNum)==ILLEGAL){
+			showIllegalStr(r);
 			return DONE;
 		}
-		ap_rputs("</H2>", r);
-		// End of Get
-        return OK;
+	}
+	/* check POST method parameters */
+	if(postNum > 0){
+		if(checkPOSTParms(r, postList, postNum)==ILLEGAL){
+			showIllegalStr(r);
+			return DONE;
+		}
 	}
 	
-	
-	if(strcmp(r->uri,"/fw/form.php")==0){
-		ap_rputs("<H2>", r);
-		if(checkPOSTParms(r, NULL, 0)==ILLEGAL){
-			// TODO
+	/* check header parameters*/
+	if(headerNum > 0){
+	    if(checkHEADERParms(r, headerList, headerNum)==ILLEGAL){
+			showIllegalStr(r);
 			return DONE;
 		}
-	    ap_rputs("</H2>", r);
-		return OK;
-	}
-	
-	if(strcmp(r->uri,"/fw/f.html")==0){
-	    if(checkHEADERParms(r, NULL, 0)==ILLEGAL){
-			// TODO
-			return DONE;
-		}
-	    return OK;
 	}
 	
     return OK;
@@ -114,13 +95,11 @@ KVPair *readPostParms(request_rec *r) {
     int res;
     int i = 0;
     char *buffer;
-    KVPair *kvp;
-    char * record;
+    KVPair *kvp = NULL;
     
     res = ap_parse_form_data(r, NULL, &pairs, -1, HUGE_STRING_LEN);
     if (res != OK || !pairs) return NULL; /* Return NULL if we failed or if there are is no POST data */
     kvp = apr_pcalloc(r->pool, sizeof(KVPair) * (pairs->nelts + 1));
-    
     while (pairs && !apr_is_empty_array(pairs)) {
         ap_form_pair_t *pair = (ap_form_pair_t *) apr_array_pop(pairs);
         apr_brigade_length(pair->value, 1, &len);
@@ -131,12 +110,12 @@ KVPair *readPostParms(request_rec *r) {
         kvp[i].key = apr_pstrdup(r->pool, pair->name);
         kvp[i].value = buffer;
         i++;
-	}
-    apr_bucket_brigade *new_brigade = apr_brigade_create(r->pool, r->connection->bucket_alloc);
+    }
+    /*apr_bucket_brigade *new_brigade = apr_brigade_create(r->pool, r->connection->bucket_alloc);
 	apr_bucket *bucket = apr_bucket_transient_create(record,
 		strlen(record), r->connection->bucket_alloc);
 	APR_BRIGADE_INSERT_TAIL(new_brigade, bucket);    
-	r->kept_body = new_brigade;
+	r->kept_body = new_brigade;*/
     return kvp;
 }
 
@@ -158,7 +137,7 @@ int checkGETParms(request_rec *r, Signiture * getSigList, int listSize){
 }
 
 int checkPOSTParms(request_rec *r, Signiture * postSigList, int listSize){
-	KVPair *postParms;
+	KVPair *postParms = NULL;
 	postParms = readPostParms(r);
     if (postParms != NULL) {
         int i = 0;
@@ -168,7 +147,9 @@ int checkPOSTParms(request_rec *r, Signiture * postSigList, int listSize){
                 if(!isLegal(postParms[i].key, postParms[i].value, postSigList, listSize)){
 					return ILLEGAL;
 				}
-            } 
+            }else{
+				break;
+			} 
         }
     }
     return LEGAL;
@@ -196,6 +177,10 @@ int isLegal(const char* key, const char* value, Signiture * list, int listSize){
 	for(i = 0; i < listSize; i++){
 		if(strcmp(list[i].key,"*")==0 || strcmp(list[i].key, key)==0){
 			if(strstr(value, list[i].value)!= NULL){
+				if(illegalStr == NULL){
+					illegalStr = (char *) calloc(0, SIGNITURE_BUFFER_SIZE);
+				}
+				strcpy(illegalStr, list[i].value);
 				return 0;
 			}
 		}
@@ -203,4 +188,8 @@ int isLegal(const char* key, const char* value, Signiture * list, int listSize){
 	return 1;
 }
 
+void showIllegalStr(request_rec *r){
+	ap_set_content_type(r, "text/html");
+	ap_rprintf(r,"Request Blocked By WAF, the request contains malicious String: %s.\n", illegalStr); 
+}
 
