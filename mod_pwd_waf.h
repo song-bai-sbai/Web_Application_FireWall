@@ -10,9 +10,10 @@
 #include <apr_file_info.h>
 #include <apr_file_io.h>
 #include <apr_tables.h>
-#include "util_script.h"
+#include <util_script.h>
 
 #include "readSigConfig.c"
+#include "waf_anomaly_detection.c"
 
 typedef struct {
     const char *key;
@@ -28,7 +29,9 @@ static char * illegalStr;
 
 static int TRAINMODE = 2001;
 
-static int DEFENDINGMODE = 2002;
+static int DETECTIONMODE = 2002;
+
+static int GENERATEPROFILE = 2003;
 
 static int MODE = 2001;
 

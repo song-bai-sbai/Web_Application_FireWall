@@ -42,9 +42,9 @@
 /* Web Application Firewall by Team Password */
 static int pwd_waf_handler(request_rec *r)
 {
-    parseConfigFile();
-    ap_rprintf(r," postNum----%d------\n", postNum);
-    ap_rprintf(r," get----%s--%s----\n", postList[0].key, postList[0].value);
+	// parse Signiture file and read all configuration into memory
+    // parseConfigFile();
+
     /* check GET method parameters*/
     if(getNum > 0)	{
       	// Get
@@ -68,6 +68,18 @@ static int pwd_waf_handler(request_rec *r)
 			return DONE;
 		}
 	}
+
+	// Anomaly Detection
+	if(MODE == TRAINMODE){
+		// TODO
+		ap_rprintf(r,"This is Train Mode....");
+		
+	}else if (MODE == GENERATEPROFILE){
+		// Generate Profile
+	}else{
+	
+		// Detection MODE
+	}
 	
     return OK;
 }
@@ -89,6 +101,17 @@ module AP_MODULE_DECLARE_DATA pwd_waf_module = {
 };
 
 KVPair *readPostParms(request_rec *r) {
+	/*apr_table_t *t;
+	if (ap_body_to_table(r, &t) == APR_SUCCESS) {
+		const apr_array_header_t *parmsArray = apr_table_elts(t);
+		const apr_table_entry_t * getParms = (apr_table_entry_t*)parmsArray->elts;
+	
+		int i = 0;
+		for (i = 0; i < parmsArray->nelts; i++) {
+			ap_rprintf(r,"   \n key = %s, val = %s\n", getParms[i].key, getParms[i].val);
+		}
+	}
+	return NULL;*/
     apr_array_header_t *pairs = NULL;
     apr_off_t len;
     apr_size_t size;
@@ -97,8 +120,11 @@ KVPair *readPostParms(request_rec *r) {
     char *buffer;
     KVPair *kvp = NULL;
     
+    apr_table_t *t;	
+	ap_args_to_table(r, &t);
+
     res = ap_parse_form_data(r, NULL, &pairs, -1, HUGE_STRING_LEN);
-    if (res != OK || !pairs) return NULL; /* Return NULL if we failed or if there are is no POST data */
+    if (res != OK || !pairs) return NULL; 
     kvp = apr_pcalloc(r->pool, sizeof(KVPair) * (pairs->nelts + 1));
     while (pairs && !apr_is_empty_array(pairs)) {
         ap_form_pair_t *pair = (ap_form_pair_t *) apr_array_pop(pairs);
@@ -109,13 +135,9 @@ KVPair *readPostParms(request_rec *r) {
         buffer[len] = 0;
         kvp[i].key = apr_pstrdup(r->pool, pair->name);
         kvp[i].value = buffer;
+        apr_table_set(t, kvp[i].key, kvp[i].value);
         i++;
     }
-    /*apr_bucket_brigade *new_brigade = apr_brigade_create(r->pool, r->connection->bucket_alloc);
-	apr_bucket *bucket = apr_bucket_transient_create(record,
-		strlen(record), r->connection->bucket_alloc);
-	APR_BRIGADE_INSERT_TAIL(new_brigade, bucket);    
-	r->kept_body = new_brigade;*/
     return kvp;
 }
 
@@ -163,7 +185,7 @@ int checkHEADERParms(request_rec *r, Signiture * headerSigList, int listSize){
     headerParms = (apr_table_entry_t *) header->elts;
     int i = 0;
     for(i = 0; i < header->nelts; i++) {
-        ap_rprintf(r, "%s: %s\n", headerParms[i].key, headerParms[i].val);
+        //ap_rprintf(r, "%s: %s\n", headerParms[i].key, headerParms[i].val);
         if(!isLegal(headerParms[i].key, headerParms[i].val, headerSigList, listSize)){
 				return ILLEGAL;
 		}
@@ -190,6 +212,6 @@ int isLegal(const char* key, const char* value, Signiture * list, int listSize){
 
 void showIllegalStr(request_rec *r){
 	ap_set_content_type(r, "text/html");
-	ap_rprintf(r,"Request Blocked By WAF, the request contains malicious String: %s.\n", illegalStr); 
+	ap_rprintf(r,"<H2>Request is blocked by WAF, the request contains malicious string:<H2> <H1>%s.<H1>\n", illegalStr); 
 }
 
