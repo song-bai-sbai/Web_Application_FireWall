@@ -43,7 +43,7 @@
 static int pwd_waf_handler(request_rec *r)
 {
 	// parse Signiture file and read all configuration into memory
-    // parseConfigFile();
+    //parseConfigFile();
 
     /* check GET method parameters*/
     if(getNum > 0)	{
@@ -68,7 +68,8 @@ static int pwd_waf_handler(request_rec *r)
 			return DONE;
 		}
 	}
-
+	MODE = TRAINMODE;
+	connect_mysql();
 	// Anomaly Detection
 	if(MODE == TRAINMODE){
 		// Do trainning
@@ -81,6 +82,8 @@ static int pwd_waf_handler(request_rec *r)
 	
 		// Detection MODE
 	}
+	
+	mysql_close(conn);	
 	
     return OK;
 }

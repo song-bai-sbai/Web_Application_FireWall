@@ -1,0 +1,17 @@
+CREATE DATABASE waf_db；
+
+GRANT ALL PRIVILEGES ON waf_db.* TO root@localhost IDENTIFIED BY "123";
+
+GRANT ALL PRIVILEGES ON waf_db.* TO root@"%" IDENTIFIED BY "123";
+
+USE DATABASE waf_db;
+
+CREATE TABLE Pages(URI varchar(255) NOT NULL, Max_Parameter_Num INT, PRIMARY KEY (URI));
+CREATE TABLE Parameters(URI varchar(255) NOT NULL, Parameter varchar(255)NOT NULL, Avg DOUBLE, SD DOUBLE, Count INT, Character_Set varchar(255), PRIMARY KEY (URI, Parameter));
+CREATE TABLE Records(ID INT NOT NULL AUTO_INCREMENT,URI varchar(255) NOT NULL, Parameter varchar(255)NOT NULL, Len DOUBLE, PRIMARY KEY (ID));
+
+
+
+
+
+

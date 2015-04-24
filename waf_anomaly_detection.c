@@ -1,6 +1,7 @@
 // This is for Train Mode code
 #include "httpd.h"
 #include <string.h>
+#include "waf_db_operation.c"
 
 typedef struct{
 	const char * key;
@@ -29,7 +30,9 @@ int detectRequest(request_rec * r);
 
 int isParamsLenLegal(int len);
 
-int isAllCharLegal(char * cur, char * seenChar);
+int allCharSeen(const char * param);
+
+int isAllCharLegal(const char * cur, const char * seenChar);
 
 // In trainning mode, to save all request info
 void saveRequestInfo(request_rec *r){
@@ -42,12 +45,14 @@ void saveRequestInfo(request_rec *r){
 	
 	// Update max parameters number for a page
 	currentMaxParamsNum = getSize + postSize;
-	int maxInDB = 0;//TODO
+	int maxInDB = select_max_parameter_num(uri);
 	if(maxInDB == -1){
 		// insert to DB
+		insert_max_parameter_num(uri, currentMaxParamsNum);
 	}else{
 		if(currentMaxParamsNum > maxInDB){
 			// update DB value
+			update_max_parameter_num(uri, currentMaxParamsNum);
 		}
 	}
 	
@@ -55,20 +60,30 @@ void saveRequestInfo(request_rec *r){
 	int i = 0;
 	for(i = 0; i< getSize; i++){
 		// save get paramether info into DB
+		insert_record_len(uri, getParams[i].key, getParams[i].length);
 		
-		// Update characters for this parameter
+		// Update characters set for this parameter
+		char * charSet = select_parameters_character_set(uri, getParams[i].key);
+		if(charSet == NULL){
+			// This is the first time to see this parameter
+			insert_parameters(uri, getParams[i].key, 0, 0, 1, getParams[i].val);
+		}else{
+			// Update char set
+			
+		}
 	}
 	
 	for(i = 0; i< postSize; i++){
 		// save post paramether info into DB
-		
-		// Update characters for this parameter
+		insert_record_len(uri, postParams[i].key, postParams[i].length);
+		// Update characters set for this parameter
 	}
 }
 
 // After finish trainning, generate a profile 
 void generateProfile(){
-
+	
+	write_profile();
 }
 
 Params * getGetParams(request_rec *r, apr_off_t * getSize){
@@ -181,7 +196,7 @@ int isParamsLenLegal(int len){
 }
 
 // check whether the parameters contains char that not seen
-int allCharSeen(char * param){
+int allCharSeen(const char * param){
 	char * seenChar = "";// TODO
 	if(!isAllCharLegal(param, seenChar)){
 		return 0;
@@ -189,7 +204,7 @@ int allCharSeen(char * param){
 	return 1;
 }
 
-int isAllCharLegal(char * cur, char * seenChar){
+int isAllCharLegal(const char * cur, const char * seenChar){
     int len = strlen(cur);
     int i = 0;
     for (i=0; i<len; i++) {

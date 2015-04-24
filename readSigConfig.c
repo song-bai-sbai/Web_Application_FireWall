@@ -8,7 +8,7 @@ typedef struct {
 } Signiture;
 
 static int SIGNITURE_BUFFER_SIZE=256;
-static char *SIGNITURE_CONFIG="/home/pw/NS/pwd_waf/waf_sig_conf";
+static char *SIGNITURE_CONFIG="/home/pw/NS/pwd_waf/WAF_Sig_Conf";
 
 static 	Signiture *headerList, *getList, *postList;
 static int headerNum=0,getNum=0,postNum=0;
