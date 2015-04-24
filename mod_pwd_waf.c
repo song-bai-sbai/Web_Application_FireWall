@@ -71,11 +71,12 @@ static int pwd_waf_handler(request_rec *r)
 
 	// Anomaly Detection
 	if(MODE == TRAINMODE){
-		// TODO
+		// Do trainning
 		ap_rprintf(r,"This is Train Mode....");
-		
+		saveRequestInfo(r);
 	}else if (MODE == GENERATEPROFILE){
 		// Generate Profile
+		generateProfile();
 	}else{
 	
 		// Detection MODE

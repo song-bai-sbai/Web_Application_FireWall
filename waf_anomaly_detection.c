@@ -8,11 +8,30 @@ typedef struct{
 	int length;
 }Params;
 
+static int EXCEEDMAXPARAMNUM = 4001;
+
+static int PARAMLENILLEGAL = 4002;
+
+static int CONTAINSNOSEENCHAR = 4003;
+
+static int PASSDETECTION = 4004;
+
+
 Params * getGetParams(request_rec *r, apr_off_t * len);
+
 Params * getPostParms(request_rec *r, apr_off_t * postSize);
-void saveRequestInfo();
+
+void saveRequestInfo(request_rec *r);
+
 void generateProfile();
 
+int detectRequest(request_rec * r);
+
+int isParamsLenLegal(int len);
+
+int isAllCharLegal(char * cur, char * seenChar);
+
+// In trainning mode, to save all request info
 void saveRequestInfo(request_rec *r){
 	int currentMaxParamsNum = 0;
 	apr_off_t getSize = 0;
@@ -47,6 +66,7 @@ void saveRequestInfo(request_rec *r){
 	}
 }
 
+// After finish trainning, generate a profile 
 void generateProfile(){
 
 }
@@ -102,6 +122,80 @@ Params *getPostParms(request_rec *r, apr_off_t * postSize) {
     return params;
 }
 
-void examineGetParams(request_rec *r, Params * getParams){
+// In detection mode, do anomaly detection
+int detectRequest(request_rec * r){
+	int currentMaxParamsNum = 0;
+	apr_off_t getSize = 0;
+	apr_off_t postSize = 0;
+	Params * getParams = getGetParams(r, &getSize);
+	Params * postParams = getPostParms(r, &postSize);
+	char * uri = r->uri;
+	
+	// Update max parameters number for a page
+	currentMaxParamsNum = getSize + postSize;
+	int maxInDB = 0;//TODO
+	if(maxInDB < currentMaxParamsNum){
+		// exceed max parameter number
+		return EXCEEDMAXPARAMNUM;
+	}
+	
+	int i = 0;
+	for(i = 0; i< getSize; i++){
+		if(!isParamsLenLegal(getParams[i].length)){
+			// parameters length is illegal
+			return PARAMLENILLEGAL;
+		}
+		
+		if(!allCharSeen(getParams[i].val)){
+			// Contains no seen characters
+			return CONTAINSNOSEENCHAR;
+		}
+	}
+	
+	for(i = 0; i< postSize; i++){
+		if(!isParamsLenLegal(postParams[i].length)){
+			// parameters length is illegal
+			return PARAMLENILLEGAL;
+		}
+		
+		if(!allCharSeen(postParams[i].val)){
+			// Contains no seen characters
+			return CONTAINSNOSEENCHAR;
+		}
+	}
+	
+	return PASSDETECTION;
+}
 
+// Get mean and standard deviation, and calculate mean +- 3d
+// Then compare
+// Return 1 if it is LEGAL, and Return 0 if it is ILLEGAL
+int isParamsLenLegal(int len){
+	// TODO
+	int mean = 0;
+	int d = 0;
+	if(len < (mean + 3*d) && len >(mean - 3*d)){
+		return 1;
+	}
+	return 0;
+}
+
+// check whether the parameters contains char that not seen
+int allCharSeen(char * param){
+	char * seenChar = "";// TODO
+	if(!isAllCharLegal(param, seenChar)){
+		return 0;
+	}
+	return 1;
+}
+
+int isAllCharLegal(char * cur, char * seenChar){
+    int len = strlen(cur);
+    int i = 0;
+    for (i=0; i<len; i++) {
+        if (strchr(seenChar,cur[i])==NULL) {
+            return 0;
+        }
+    }
+    return 1;
 }
