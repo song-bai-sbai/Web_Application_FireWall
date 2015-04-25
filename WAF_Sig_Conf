@@ -1,4 +1,4 @@
 HEADER:User-Agent,CONTAINS:"<script>"	/*Detect basic XSS ATTACK through User-Agent Header*/
-HEADER:User-Agent,CONTAINS:"Chrome"	/*Deny all requests from hosts that identify themselves as bots*/
+HEADER:User-Agent,CONTAINS:"bot"	/*Deny all requests from hosts that identify themselves as bots*/
 REQUEST_METHOD:GET,PARAMETER:*,CONTAINS:"select" /*Search all parameters of GET Requests for possible SQL Injection*/
 REQUEST_METHOD:POST,PARAMETER:username,CONTAINS:"admin" /*Search the parameter "foo" of POST Requests for possible Directory Traversal vulnerabilities*/

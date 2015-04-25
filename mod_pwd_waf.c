@@ -42,6 +42,9 @@
 /* Web Application Firewall by Team Password */
 static int pwd_waf_handler(request_rec *r)
 {
+	// Get current mode
+	MODE = readCurrentMode();
+
 	// check if is change mode request
 	if(isChangeMode(r->uri)){
 		if(isAdmin(r)){
@@ -63,7 +66,7 @@ static int pwd_waf_handler(request_rec *r)
 		}
 	}
 	// parse Signiture file and read all configuration into memory
-    //parseConfigFile();
+    parseConfigFile();
 
     /* check GET method parameters*/
     if(getNum > 0)	{
@@ -88,11 +91,14 @@ static int pwd_waf_handler(request_rec *r)
 			return DONE;
 		}
 	}
+	// Update Mode to file
+	writeCurrentMode(MODE);
+	
 	connect_mysql();
 	// Anomaly Detection
 	if(MODE == TRAINMODE){
 		// Do trainning
-		//ap_rprintf(r,"This is Train Mode....");
+		ap_rprintf(r,"This is Train Mode....");
 		saveRequestInfo(r);
 	}else if (MODE == GENERATEPROFILE){
 		//ap_rprintf(r, "Generate Profile");
@@ -102,6 +108,7 @@ static int pwd_waf_handler(request_rec *r)
 		MODE = DETECTIONMODE;
 	}else{
 		// Detection MODE
+		ap_rprintf(r,"This is Detection Mode....");
 		int result = PASSDETECTION;
 		result = detectRequest(r);
 		mysql_close(conn);
@@ -118,6 +125,11 @@ static int pwd_waf_handler(request_rec *r)
 		}else if(result == CONTAINSNOSEENCHAR){
 			// Contains no seen characters
 			char * errorInfo= "Some parameters contain illegal characters!";
+			showDetectionResult(r, errorInfo);
+			return DONE;
+		}else if(result == UNKNOWNPRARM){
+			// Contains unknown parameter
+			char * errorInfo= "Some parameters are unknwn!";
 			showDetectionResult(r, errorInfo);
 			return DONE;
 		}else{
@@ -154,17 +166,6 @@ module AP_MODULE_DECLARE_DATA pwd_waf_module = {
 };
 
 KVPair *readPostParms(request_rec *r) {
-	/*apr_table_t *t;
-	if (ap_body_to_table(r, &t) == APR_SUCCESS) {
-		const apr_array_header_t *parmsArray = apr_table_elts(t);
-		const apr_table_entry_t * getParms = (apr_table_entry_t*)parmsArray->elts;
-	
-		int i = 0;
-		for (i = 0; i < parmsArray->nelts; i++) {
-			ap_rprintf(r,"   \n key = %s, val = %s\n", getParms[i].key, getParms[i].val);
-		}
-	}
-	return NULL;*/
     apr_array_header_t *pairs = NULL;
     apr_off_t len;
     apr_size_t size;
@@ -218,7 +219,7 @@ int checkPOSTParms(request_rec *r, Signiture * postSigList, int listSize){
         int i = 0;
         for (i = 0; &postParms[i]; i++) {
             if (postParms[i].key && postParms[i].value) {
-                //ap_rprintf(r, "%s = %s\n", postParms[i].key, postParms[i].value);
+                ap_rprintf(r, "%s = %s\n", postParms[i].key, postParms[i].value);
                 if(!isLegal(postParms[i].key, postParms[i].value, postSigList, listSize)){
 					return ILLEGAL;
 				}
@@ -340,4 +341,51 @@ void showModeChangeInfo(request_rec *r, int mode){
 void showDetectionResult(request_rec *r, char * result){
 	ap_set_content_type(r, "text/html");
 	ap_rprintf(r,"<H2>%s</H2>", result);
+}
+
+int readCurrentMode(){
+	FILE * fp;
+	fp = fopen(MODE_CONFIG_PATH, "r");
+
+	char *line = (char *)malloc(SIGNITURE_BUFFER_SIZE);
+	char *mode = (char *)malloc(SIGNITURE_BUFFER_SIZE);
+	if(fp) {
+		char *i, *buf;
+		if (fgets(line,SIGNITURE_BUFFER_SIZE, fp) != NULL){ 
+			strtok(line, "\n");
+			i=strstr(line,"=");
+			buf=i+1;
+			strcpy(mode, buf);	
+		}
+		fclose(fp);           
+	}
+	if (line){
+		free(line);
+	}
+	int modeCode = 0;
+	if(strcmp(mode, "Train")==0){
+		modeCode = TRAINMODE;
+	}else{
+		modeCode = DETECTIONMODE;
+	}
+	return modeCode;
+}
+
+void writeCurrentMode(int modeCode){
+	char * mode;
+	if(modeCode == TRAINMODE){
+		mode = "Train";
+	}else{
+		mode = "Detection";
+	}
+	FILE *f = fopen(MODE_CONFIG_PATH, "w");
+	if (f == NULL){
+		exit(1);
+	}
+	char *str=(char *)malloc(WRITE_BUFFER_SIZE);
+	str[0] = '\0'; 
+	strcat(str, "Mode=");
+	strcat(str,mode);
+	fprintf(f, "%s", str);
+	fclose(f);
 }

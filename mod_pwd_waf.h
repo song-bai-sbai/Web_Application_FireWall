@@ -22,6 +22,7 @@ typedef struct {
 
 static char* changeModeURI ="/fw/modeChange";
 static const char *ADMIN_CONFIG="/home/pw/NS/pwd_waf/waf_admin";
+static const char *MODE_CONFIG_PATH="/home/pw/NS/pwd_waf/WAF_Mode";
 
 static int LEGAL = 1001;
 
@@ -58,3 +59,7 @@ void read_admin_file(char *user, char *password);
 void showModeChangeInfo(request_rec *r, int mode);
 
 void showDetectionResult(request_rec *r, char * result);
+
+int readCurrentMode();
+
+void writeCurrentMode(int mode);

@@ -17,6 +17,7 @@ static int CONTAINSNOSEENCHAR = 4003;
 
 static int PASSDETECTION = 4004;
 
+static int UNKNOWNPRARM = 4005;
 
 Params * getGetParams(request_rec *r, apr_off_t * len);
 
@@ -37,6 +38,8 @@ int isAllCharLegal(const char * cur, const char * seenChar);
 void updateCharSet(const char * cur, char * charSet);
 
 int isEmpty(const char * str);
+
+int isKnownParams(const char * uri, const char* param);
 
 // In trainning mode, to save all request info
 void saveRequestInfo(request_rec *r){
@@ -143,7 +146,7 @@ Params *getPostParms(request_rec *r, apr_off_t * postSize) {
         params[i].key = apr_pstrdup(r->pool, pair->name);
         params[i].val = buffer;
         params[i].length = strlen(buffer);
-        //ap_rprintf(r,"key : val : len: is %s : %s : %d ===", params[i].key, params[i].val, params[i].length);
+        ap_rprintf(r,"key : val : len: is %s : %s : %d ===", params[i].key, params[i].val, params[i].length);
         i++;
     }
     *postSize = i;
@@ -180,6 +183,11 @@ int detectRequest(request_rec * r){
 	
 	int i = 0;
 	for(i = 0; i< getSize; i++){
+		if(!isKnownParams(uri, getParams[i].key)){
+			// The parameter is unknow
+			ap_rprintf(r,"<H3>Parameter:'%s' is unknown!</H3>",getParams[i].key);
+			return UNKNOWNPRARM;
+		}
 		if(!isParamsLenLegal(uri, getParams[i].key, getParams[i].length)){
 			// parameters length is illegal
 			ap_rprintf(r,"<H3>Parameter:'%s' length is illegal!</H3>",getParams[i].key);
@@ -194,6 +202,11 @@ int detectRequest(request_rec * r){
 	}
 	
 	for(i = 0; i< postSize; i++){
+		if(!isKnownParams(uri, postParams[i].key)){
+			// The parameter is unknow
+			ap_rprintf(r,"<H3>Parameter:'%s' is unknown!</H3>",postParams[i].key);
+			return UNKNOWNPRARM;
+		}
 		if(!isParamsLenLegal(uri, postParams[i].key, postParams[i].length)){
 			// parameters length is illegal
 			ap_rprintf(r,"<H3>Parameter:'%s' length is illegal!</H3>",postParams[i].key);
@@ -260,4 +273,12 @@ int isEmpty(const char * str){
 		return 1;
 	}
 	return 0;
+}
+
+int isKnownParams(const char * uri, const char* param){
+	int count = select_parameters_count(uri, param);
+	if(count < 0){
+		return 0;
+	}
+	return 1;
 }
