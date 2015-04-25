@@ -5,12 +5,19 @@
 #include <my_global.h>
 #include <mysql.h>
 
-static const int QUERY_BUFFER_SIZE=1024;
+typedef struct{
+	 char *uri;
+	 char *para;
+} UPPair; 
+
 static const char *PROFILE_PATH="/home/pw/NS/pwd_waf/WAF_Profile";
 
 //double WRITE_BUFFER_SIZE if char length reaches 1/2 capacity
 static int WRITE_BUFFER_SIZE=1024;
+static const int QUERY_BUFFER_SIZE=1024;
+static int VARCHAR_SIZE=255;
 
+static UPPair *uriParaList;
 static MYSQL *conn;
 static char *server = "localhost"; 
 static char *user = "root"; 
@@ -41,7 +48,9 @@ int insert_parameters(char *uri, char *parameter, double avg, double sd, int cou
 int update_parameters_stat(char *uri, char *parameter, double avg, double sd, int count);
 int update_parameters_character_set(char *uri, char *parameter, char *str);
 
-insert_record_len(char *uri, char *parameter, int len);
+int insert_record_len(char *uri, char *parameter, int len);
+
+void updateParametersTable();
 
 void expand_write_buffer();
 
@@ -74,12 +83,11 @@ void write_profile(){
 	MYSQL_RES *res = mysql_use_result(conn);
 	if (res!=NULL){
 	MYSQL_ROW row;
-	while ((row = mysql_fetch_row(res))!=NULL){
-		 printf("%s,%s\n", row[0],row[1]);
-		 buf=(char *)malloc(255);
-		 sprintf(buf,"%s;%s\n", row[0],row[1]); 
-		 strcat(profile,buf);
-		 expand_write_buffer();
+		while ((row = mysql_fetch_row(res))!=NULL){
+			buf=(char *)malloc(VARCHAR_SIZE*2);
+			sprintf(buf,"%s;%s\n", row[0],row[1]); 
+			strcat(profile,buf);
+			expand_write_buffer();
 		}
 	}
 	
@@ -90,12 +98,11 @@ void write_profile(){
 	res = mysql_use_result(conn);
 	if (res!=NULL){
 	MYSQL_ROW row;
-	while ((row = mysql_fetch_row(res))!=NULL){
-		 printf("%s;%s;%s;%s;%s;%s\n", row[0],row[1],row[2],row[3],row[4],row[5]);
-		 buf=(char *)malloc(255);
-		 sprintf(buf,"%s;%s;%s;%s;%s;%s\n", row[0],row[1],row[2],row[3],row[4],row[5]); 
-		 strcat(profile,buf);
-		 expand_write_buffer();
+		while ((row = mysql_fetch_row(res))!=NULL){
+			buf=(char *)malloc(VARCHAR_SIZE*6);
+			sprintf(buf,"%s;%s;%s;%s;%s;%s\n", row[0],row[1],row[2],row[3],row[4],row[5]); 
+			strcat(profile,buf);
+			expand_write_buffer();
 		}
 	}
 	
@@ -111,7 +118,7 @@ void connect_mysql(){
    if (!mysql_real_connect(conn, server, user, password, database, 0, NULL, 0)) {
       fprintf(stderr, "%s\n", mysql_error(conn));
       exit(1);
-   }
+      }
 }
 
 /*
@@ -131,7 +138,7 @@ int execute_query(char *query){
  * if return type of query result is double, call double_type_reuslt(char *query);
  * */
 double double_type_result(char *query){
-		if(!execute_query(query)){
+	if(!execute_query(query)){
 		MYSQL_RES *res = mysql_use_result(conn);
 		MYSQL_ROW row= mysql_fetch_row(res);
 		if (row){
@@ -139,9 +146,9 @@ double double_type_result(char *query){
 			strcpy(str, row[0]);
 			mysql_free_result(res);
 			return atof(str);
-			}
+		}
 		mysql_free_result(res);
-		}	
+	}	
 	return (double)(-1);
 }
 
@@ -160,7 +167,6 @@ int int_type_result(char *query){
 	return -1;
 }
 	
-
 int select_max_parameter_num_all(){
 	query="SELECT COALESCE(MAX(Max_Parameter_Num),-1) FROM Pages";
 	return int_type_result(query);
@@ -186,7 +192,6 @@ int update_max_parameter_num(char *uri, int val){
 	query=q;
 	return execute_query(query);
 }
-
 
 double select_parameters_avg(char *uri, char *parameter){
 	char q[QUERY_BUFFER_SIZE];
@@ -218,21 +223,52 @@ double compute_len_avg(char *uri, char *parameter){
 
 double compute_len_std(char *uri, char *parameter){
 	char q[QUERY_BUFFER_SIZE];
-	snprintf(q,sizeof(q),"SELECT IFNULL(FORMAT(STD(Len),2),-1) FROM Records WHERE URI='%s' AND Parameter='%s'",uri,parameter);
+	snprintf(q,sizeof(q),"SELECT IFNULL(STD(Len),-1) FROM Records WHERE URI='%s' AND Parameter='%s'",uri,parameter);
 	query=q;
 	return double_type_result(query);
 }
 	
+void updateParametersTable(){
+	query="SELECT COUNT(*) FROM Parameters";
+	int total=int_type_result(query);
+	if (total>0){
+		uriParaList=(UPPair *) malloc(sizeof(UPPair)*total);
+		query="SELECT * FROM Parameters";
+		execute_query(query);
+		MYSQL_RES *res = mysql_use_result(conn);
+		MYSQL_ROW row;
+		int num=0;
+		char *uriBuf;
+		char *paraBuf;
+		while ((row = mysql_fetch_row(res))!=NULL){
+			uriBuf=(char *)malloc(VARCHAR_SIZE); 
+			paraBuf=(char *)malloc(VARCHAR_SIZE);
+			strncpy(uriBuf,row[0],VARCHAR_SIZE);
+			strncpy(paraBuf,row[1],VARCHAR_SIZE); 
+			uriParaList[num].uri=uriBuf;
+			uriParaList[num].para=paraBuf;
+			num++;
+		}
+		mysql_free_result(res);
+		int i;
+		for (i=0;i<total;i++){
+			update_parameters_stat(uriParaList[i].uri,uriParaList[i].para,compute_len_avg(uriParaList[i].uri,uriParaList[i].para),compute_len_std(uriParaList[i].uri,uriParaList[i].para),count_record(uriParaList[i].uri,uriParaList[i].para));
+		}
+		if(uriBuf) free(uriBuf);
+		if(paraBuf) free(paraBuf);
+	}	
+}
+
 int count_record(char *uri, char *parameter){
 	char q[QUERY_BUFFER_SIZE];
 	snprintf(q,sizeof(q),"SELECT COUNT(*) FROM Records WHERE URI='%s' AND Parameter='%s'",uri,parameter);
 	query=q;
 	return int_type_result(query);
 }
-		
+
 char* select_parameters_character_set(char *uri, char *parameter){
 	char q[QUERY_BUFFER_SIZE];
-	snprintf(q,sizeof(q),"SELECT COALESCE(Character_Set,\"NULL\") FROM Parameters WHERE URI='%s' AND Parameter='%s'",uri,parameter);
+	snprintf(q,sizeof(q),"SELECT COALESCE(Character_Set,\"\") FROM Parameters WHERE URI='%s' AND Parameter='%s'",uri,parameter);
 	query=q;
 	if(!execute_query(query)){
 		MYSQL_RES *res = mysql_use_result(conn);
@@ -270,7 +306,6 @@ int update_parameters_character_set(char *uri, char *parameter, char *characters
 	return execute_query(query);
 }
 
-
 int insert_record_len(char *uri, char *parameter, int len){
 	char q[QUERY_BUFFER_SIZE];
 	snprintf(q,sizeof(q),"INSERT INTO Records(URI,Parameter,Len) VALUES('%s', '%s', %d)",uri,parameter,len);
@@ -278,68 +313,7 @@ int insert_record_len(char *uri, char *parameter, int len){
 	return execute_query(query);
 }
 
-	
 
-int queryTest(){	
-	connect_mysql();  
-	char *uri="login.php";
-	char *para="p1";
-	char *characterset="abc123!@#";
-	int val=5;
-	printf("Result: %d\n",select_max_parameter_num(uri));
-	val=125;
-	update_max_parameter_num(uri,125);
-	update_max_parameter_num(uri,11554525);
-	printf("Result: %d\n",select_max_parameter_num(uri));
-	printf("Result: %d\n",select_max_parameter_num(uri));
-	printf("%f\n",select_parameters_avg(uri,para));
-	int avg=compute_len_avg(uri,para);
-	int std=compute_len_std(uri,para);
-	int count=count_record(uri,para);
-	insert_parameters(uri,para,avg,std,count,"QWERTYU");
-	update_parameters_stat(uri,para,2.33,0.22,7);
-	printf("%f\n",select_parameters_avg(uri,para));
-	printf("%f\n",select_parameters_avg(uri,para));
-	printf("%d\n",select_parameters_count(uri,para));
-	printf("%s\n",select_parameters_character_set(uri,para));
-	insert_max_parameter_num("first_page.php",6);
-	update_max_parameter_num("second_page.php",12345);
 
-	int i;
-	
-	for (i=0;i<100;i++){
-		char *buf=(char *)malloc(64);
-		char *para2=malloc(255);
-		buf[0]='\0';
-		para2[0]='\0';
-		strcat(para2,"para");
-		sprintf(buf, "%d", i);
-		strcat(para2,buf);
-		//insert_parameters("second_page.php", para2, i*i,i,32,"NULL");
-		insert_record_len("second_page.php","para2",i);
-		free(buf);
-		free(para2);
-		}
-	
-	 avg=compute_len_avg("first_page.php",para);
-	 std=compute_len_std("first_page.php",para);
-	 count=count_record("first_page.php",para);
-	insert_parameters("first_page.php",para,avg,std,count, characterset);
-	
-	avg=compute_len_avg("second_page.php","para2");
-	 std=compute_len_std("second_page.php","para2");
-	 count=count_record("second_page.php","para2");
-	insert_parameters("second_page.php", "para2",avg,std,count, characterset);
-	
-	printf("%f\n",select_parameters_avg("first_page.php",para));
-	printf("%d\n",select_parameters_count("first_page.php",para));
-	printf("%f\n",select_parameters_sd("first_page.php",para));
-	printf("%s\n",select_parameters_character_set("first_page.php",para));
-	
-	printf("AVG %f\n",compute_len_avg("second_page.php","para"));
-	printf("STD %f\n",compute_len_std("second_page.php","para"));
-	printf("Max Para Num of All: %d\n",select_max_parameter_num_all());
-	write_profile();
-	mysql_close(conn);	
-	return 0;
-}
+
+

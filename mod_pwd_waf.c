@@ -42,6 +42,26 @@
 /* Web Application Firewall by Team Password */
 static int pwd_waf_handler(request_rec *r)
 {
+	// check if is change mode request
+	if(isChangeMode(r->uri)){
+		if(isAdmin(r)){
+			apr_table_t *t;	
+			ap_args_to_table(r, &t);
+			const char *mode;
+			mode = apr_table_get(t, "mode");
+			if(strcmp(mode, "Train")==0){
+				MODE = TRAINMODE;
+			}else if(strcmp(mode, "Generate_Profile")==0){
+				MODE = GENERATEPROFILE;
+			}else{
+				MODE = DETECTIONMODE;
+			}
+		}else{
+			ap_set_content_type(r, "text/html");
+			ap_rprintf(r,"<H2>Username or Password is not correct!</H2>");
+			return DONE;
+		}
+	}
 	// parse Signiture file and read all configuration into memory
     //parseConfigFile();
 
@@ -68,22 +88,51 @@ static int pwd_waf_handler(request_rec *r)
 			return DONE;
 		}
 	}
-	MODE = TRAINMODE;
 	connect_mysql();
 	// Anomaly Detection
 	if(MODE == TRAINMODE){
 		// Do trainning
-		ap_rprintf(r,"This is Train Mode....");
+		//ap_rprintf(r,"This is Train Mode....");
 		saveRequestInfo(r);
 	}else if (MODE == GENERATEPROFILE){
+		//ap_rprintf(r, "Generate Profile");
 		// Generate Profile
 		generateProfile();
+		//Then change mode to detection
+		MODE = DETECTIONMODE;
 	}else{
-	
 		// Detection MODE
+		int result = PASSDETECTION;
+		result = detectRequest(r);
+		mysql_close(conn);
+		if(result == EXCEEDMAXPARAMNUM){
+			// exceed max parameter number
+			char * errorInfo= "The parameter number exceeded max number!";
+			showDetectionResult(r, errorInfo);
+			return DONE;
+		}else if(result == PARAMLENILLEGAL){
+			// parameters length is illegal
+			char * errorInfo= "Some parameters' length are illegal!";
+			showDetectionResult(r, errorInfo);
+			return DONE;
+		}else if(result == CONTAINSNOSEENCHAR){
+			// Contains no seen characters
+			char * errorInfo= "Some parameters contain illegal characters!";
+			showDetectionResult(r, errorInfo);
+			return DONE;
+		}else{
+			// Pass detection
+			return OK;
+		}
 	}
 	
 	mysql_close(conn);	
+	
+	// The request need response
+	if(isChangeMode(r->uri)){
+		showModeChangeInfo(r, MODE);
+		return DONE;
+	}
 	
     return OK;
 }
@@ -154,7 +203,7 @@ int checkGETParms(request_rec *r, Signiture * getSigList, int listSize){
 	
 	int i = 0;
 	for (i = 0; i < parmsArray->nelts; i++) {
-		ap_rprintf(r,"   \n key = %s, val = %s\n", getParms[i].key, getParms[i].val);
+		//ap_rprintf(r,"   \n key = %s, val = %s\n", getParms[i].key, getParms[i].val);
 		if(!isLegal(getParms[i].key, getParms[i].val, getSigList, listSize)){
 			return ILLEGAL;
 		}
@@ -169,7 +218,7 @@ int checkPOSTParms(request_rec *r, Signiture * postSigList, int listSize){
         int i = 0;
         for (i = 0; &postParms[i]; i++) {
             if (postParms[i].key && postParms[i].value) {
-                ap_rprintf(r, "%s = %s\n", postParms[i].key, postParms[i].value);
+                //ap_rprintf(r, "%s = %s\n", postParms[i].key, postParms[i].value);
                 if(!isLegal(postParms[i].key, postParms[i].value, postSigList, listSize)){
 					return ILLEGAL;
 				}
@@ -219,3 +268,76 @@ void showIllegalStr(request_rec *r){
 	ap_rprintf(r,"<H2>Request is blocked by WAF, the request contains malicious string:<H2> <H1>%s.<H1>\n", illegalStr); 
 }
 
+int isChangeMode(const char* uri){
+	if(strcmp(uri, changeModeURI)==0){
+		return 1;
+	}
+	return 0;
+}
+
+int isAdmin(request_rec *r){
+	apr_table_t *t;	
+	ap_args_to_table(r, &t);
+	const char *usrInReq;
+	const char *pwdInReq;
+	usrInReq = apr_pcalloc(r->pool, SIGNITURE_BUFFER_SIZE);
+	usrInReq = apr_table_get(t, "username");
+	pwdInReq = apr_pcalloc(r->pool, SIGNITURE_BUFFER_SIZE);
+	pwdInReq = apr_table_get(t, "password");
+	
+	//ap_rprintf(r, "usr %s: pwd %s\n", usrInReq, pwdInReq);
+	char * usrInFile;
+	char * pwdInFile;
+	usrInFile = apr_pcalloc(r->pool, SIGNITURE_BUFFER_SIZE);
+	pwdInFile = apr_pcalloc(r->pool, SIGNITURE_BUFFER_SIZE);
+	read_admin_file(usrInFile, pwdInFile);
+	//ap_rprintf(r, "usr %s: pwd %s\n", usrInFile, pwdInFile);
+	if(strcmp(usrInReq, usrInFile)==0 && strcmp(pwdInReq, pwdInFile)==0){
+		return 1;
+	}
+	return 0;
+}
+
+void read_admin_file(char *user, char *password){
+	FILE * fp;
+	fp = fopen(ADMIN_CONFIG, "r");
+
+	char *line = (char *)malloc(SIGNITURE_BUFFER_SIZE);
+	if(fp) {
+		char *i, *buf;
+		if (fgets(line,SIGNITURE_BUFFER_SIZE, fp) != NULL){ 
+			strtok(line, "\n");
+			i=strstr(line,"=");
+			buf=i+1;
+			strcpy(user, buf);
+			
+		}
+		if (fgets(line,SIGNITURE_BUFFER_SIZE, fp) != NULL){ 
+			strtok(line, "\n");
+			i=strstr(line,"=");
+			buf=i+1;
+			strcpy(password, buf);
+			
+		}
+		
+		fclose(fp);           
+	}
+	if (line){
+		free(line);
+	}
+}
+
+void showModeChangeInfo(request_rec *r, int mode){
+	if(mode == TRAINMODE){
+		ap_set_content_type(r, "text/html");
+		ap_rprintf(r,"<H2>Now the WAF is Training mode, you can start training!</H2>");
+	}else if(mode == DETECTIONMODE){
+		ap_set_content_type(r, "text/html");
+		ap_rprintf(r,"<H2>The profile has been generated successfully, the WAF starts detecting!</H2>");
+	}
+}
+
+void showDetectionResult(request_rec *r, char * result){
+	ap_set_content_type(r, "text/html");
+	ap_rprintf(r,"<H2>%s</H2>", result);
+}

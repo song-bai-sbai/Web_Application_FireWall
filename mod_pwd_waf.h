@@ -20,6 +20,8 @@ typedef struct {
     const char *value;
 } KVPair;
 
+static char* changeModeURI ="/fw/modeChange";
+static const char *ADMIN_CONFIG="/home/pw/NS/pwd_waf/waf_admin";
 
 static int LEGAL = 1001;
 
@@ -33,7 +35,7 @@ static int DETECTIONMODE = 2002;
 
 static int GENERATEPROFILE = 2003;
 
-static int MODE = 2001;
+static int MODE = 2002;
 
 KVPair *readPostParms(request_rec *r);
 
@@ -47,3 +49,12 @@ int isLegal(const char* key, const char* value, Signiture * list, int listSize);
 
 void showIllegalStr();
 
+int isChangeMode(const char* uri);
+
+int isAdmin(request_rec *r);
+
+void read_admin_file(char *user, char *password);
+
+void showModeChangeInfo(request_rec *r, int mode);
+
+void showDetectionResult(request_rec *r, char * result);

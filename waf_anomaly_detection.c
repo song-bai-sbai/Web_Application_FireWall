@@ -28,11 +28,15 @@ void generateProfile();
 
 int detectRequest(request_rec * r);
 
-int isParamsLenLegal(int len);
+int isParamsLenLegal(const char * uri, const char* param, int len);
 
-int allCharSeen(const char * param);
+int allCharSeen(const char * uri, const char* param,const char * val);
 
 int isAllCharLegal(const char * cur, const char * seenChar);
+
+void updateCharSet(const char * cur, char * charSet);
+
+int isEmpty(const char * str);
 
 // In trainning mode, to save all request info
 void saveRequestInfo(request_rec *r){
@@ -69,7 +73,8 @@ void saveRequestInfo(request_rec *r){
 			insert_parameters(uri, getParams[i].key, 0, 0, 1, getParams[i].val);
 		}else{
 			// Update char set
-			
+			updateCharSet(getParams[i].val, charSet);
+			update_parameters_character_set(uri, getParams[i].key, charSet);
 		}
 	}
 	
@@ -77,12 +82,21 @@ void saveRequestInfo(request_rec *r){
 		// save post paramether info into DB
 		insert_record_len(uri, postParams[i].key, postParams[i].length);
 		// Update characters set for this parameter
+		char * charSet = select_parameters_character_set(uri, postParams[i].key);
+		if(charSet == NULL){
+			// This is the first time to see this parameter
+			insert_parameters(uri, postParams[i].key, 0, 0, 1, postParams[i].val);
+		}else{
+			// Update char set
+			updateCharSet(postParams[i].val, charSet);
+			update_parameters_character_set(uri, postParams[i].key, charSet);
+		}
 	}
 }
 
 // After finish trainning, generate a profile 
 void generateProfile(){
-	
+	updateParametersTable();
 	write_profile();
 }
 
@@ -102,7 +116,7 @@ Params * getGetParams(request_rec *r, apr_off_t * getSize){
 		params[i].key = getParms[i].key;
 		params[i].val = getParms[i].val;
 		params[i].length = strlen(params[i].val);
-		ap_rprintf(r,"key : val : len: is %s : %s : %d ===", params[i].key, params[i].val, params[i].length);
+		//ap_rprintf(r,"key : val : len: is %s : %s : %d ===", params[i].key, params[i].val, params[i].length);
 	}
 	return params;
 }
@@ -129,7 +143,7 @@ Params *getPostParms(request_rec *r, apr_off_t * postSize) {
         params[i].key = apr_pstrdup(r->pool, pair->name);
         params[i].val = buffer;
         params[i].length = strlen(buffer);
-        ap_rprintf(r,"key : val : len: is %s : %s : %d ===", params[i].key, params[i].val, params[i].length);
+        //ap_rprintf(r,"key : val : len: is %s : %s : %d ===", params[i].key, params[i].val, params[i].length);
         i++;
     }
     *postSize = i;
@@ -148,7 +162,17 @@ int detectRequest(request_rec * r){
 	
 	// Update max parameters number for a page
 	currentMaxParamsNum = getSize + postSize;
-	int maxInDB = 0;//TODO
+	int maxInDB = select_max_parameter_num(uri);
+	if(maxInDB == -1){
+		// The request is not store in DB, compare it with all pages max
+		maxInDB = select_max_parameter_num_all();
+		if(maxInDB < currentMaxParamsNum){
+			// exceed max parameter number
+			return EXCEEDMAXPARAMNUM;
+		}else{
+			return PASSDETECTION;
+		}
+	}
 	if(maxInDB < currentMaxParamsNum){
 		// exceed max parameter number
 		return EXCEEDMAXPARAMNUM;
@@ -156,25 +180,29 @@ int detectRequest(request_rec * r){
 	
 	int i = 0;
 	for(i = 0; i< getSize; i++){
-		if(!isParamsLenLegal(getParams[i].length)){
+		if(!isParamsLenLegal(uri, getParams[i].key, getParams[i].length)){
 			// parameters length is illegal
+			ap_rprintf(r,"<H3>Parameter:'%s' length is illegal!</H3>",getParams[i].key);
 			return PARAMLENILLEGAL;
 		}
 		
-		if(!allCharSeen(getParams[i].val)){
+		if(!allCharSeen(uri, getParams[i].key,getParams[i].val)){
 			// Contains no seen characters
+			ap_rprintf(r,"<H3>Parameter:'%s' contains illegal characters!</H3>",getParams[i].key);
 			return CONTAINSNOSEENCHAR;
 		}
 	}
 	
 	for(i = 0; i< postSize; i++){
-		if(!isParamsLenLegal(postParams[i].length)){
+		if(!isParamsLenLegal(uri, postParams[i].key, postParams[i].length)){
 			// parameters length is illegal
+			ap_rprintf(r,"<H3>Parameter:'%s' length is illegal!</H3>",postParams[i].key);
 			return PARAMLENILLEGAL;
 		}
 		
-		if(!allCharSeen(postParams[i].val)){
+		if(!allCharSeen(uri, postParams[i].key,postParams[i].val)){
 			// Contains no seen characters
+			ap_rprintf(r,"<H3>Parameter:'%s' contains illegal characters!</H3>",postParams[i].key);
 			return CONTAINSNOSEENCHAR;
 		}
 	}
@@ -185,20 +213,19 @@ int detectRequest(request_rec * r){
 // Get mean and standard deviation, and calculate mean +- 3d
 // Then compare
 // Return 1 if it is LEGAL, and Return 0 if it is ILLEGAL
-int isParamsLenLegal(int len){
-	// TODO
-	int mean = 0;
-	int d = 0;
-	if(len < (mean + 3*d) && len >(mean - 3*d)){
+int isParamsLenLegal(const char * uri, const char* param, int len){
+	double mean = select_parameters_avg(uri, param);
+	double d = select_parameters_sd(uri, param);
+	if(len <= (mean + 3*d) && len >=(mean - 3*d)){
 		return 1;
 	}
 	return 0;
 }
 
 // check whether the parameters contains char that not seen
-int allCharSeen(const char * param){
-	char * seenChar = "";// TODO
-	if(!isAllCharLegal(param, seenChar)){
+int allCharSeen(const char * uri, const char* param,const char * val){
+	char * charSet = select_parameters_character_set(uri, param);
+	if(!isAllCharLegal(val, charSet)){
 		return 0;
 	}
 	return 1;
@@ -213,4 +240,24 @@ int isAllCharLegal(const char * cur, const char * seenChar){
         }
     }
     return 1;
+}
+
+void updateCharSet(const char * cur, char * charSet){
+    int len = strlen(cur);
+    int i = 0;
+    int size = 0;
+    for(i=0; i<len; i++){
+        if (strchr(charSet, cur[i]) == NULL) {
+            size = strlen(charSet);
+            charSet[size]=cur[i];
+            charSet[size+1]='\0';
+        }
+    }
+}
+
+int isEmpty(const char * str){
+	if(strcmp(str,"")==0){
+		return 1;
+	}
+	return 0;
 }
