@@ -20,7 +20,7 @@ typedef struct {
     const char *value;
 } KVPair;
 
-static char* changeModeURI ="/fw/modeChange";
+static char* changeModeURI ="/modeChange";
 static const char *ADMIN_CONFIG="/home/pw/NS/pwd_waf/waf_admin";
 static const char *MODE_CONFIG_PATH="/home/pw/NS/pwd_waf/WAF_Mode";
 

@@ -42,7 +42,6 @@
 /* Web Application Firewall by Team Password */
 static int pwd_waf_handler(request_rec *r)
 {
-	return OK;
 	// Get current mode
 	MODE = readCurrentMode();
 
@@ -93,7 +92,6 @@ static int pwd_waf_handler(request_rec *r)
 		}
 	}
 	// Update Mode to file
-	writeCurrentMode(MODE);
 	
 	connect_mysql();
 	// Anomaly Detection
@@ -101,18 +99,21 @@ static int pwd_waf_handler(request_rec *r)
 		// Do trainning
 		ap_rprintf(r,"This is Train Mode....");
 		saveRequestInfo(r);
+		writeCurrentMode(MODE);
 	}else if (MODE == GENERATEPROFILE){
 		//ap_rprintf(r, "Generate Profile");
 		// Generate Profile
 		generateProfile();
 		//Then change mode to detection
 		MODE = DETECTIONMODE;
+		writeCurrentMode(MODE);
 	}else{
 		// Detection MODE
 		ap_rprintf(r,"This is Detection Mode....");
 		int result = PASSDETECTION;
 		result = detectRequest(r);
 		mysql_close(conn);
+		writeCurrentMode(MODE);
 		if(result == EXCEEDMAXPARAMNUM){
 			// exceed max parameter number
 			char * errorInfo= "The parameter number exceeded max number!";
