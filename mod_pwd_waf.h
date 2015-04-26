@@ -11,6 +11,7 @@
 #include <apr_file_io.h>
 #include <apr_tables.h>
 #include <util_script.h>
+#include <ctype.h>
 
 #include "readSigConfig.c"
 #include "waf_anomaly_detection.c"
@@ -21,7 +22,7 @@ typedef struct {
 } KVPair;
 
 static char* changeModeURI ="/modeChange";
-static const char *ADMIN_CONFIG="/home/pw/NS/pwd_waf/waf_admin";
+static const char *ADMIN_CONFIG="/home/pw/NS/pwd_waf/WAF_Admin";
 static const char *MODE_CONFIG_PATH="/home/pw/NS/pwd_waf/WAF_Mode";
 
 static int LEGAL = 1001;
@@ -46,7 +47,7 @@ int checkPOSTParms(request_rec *r, Signiture * postSigList, int listSize);
 
 int checkHEADERParms(request_rec *r, Signiture * headerSigList, int listSize);
 
-int isLegal(const char* key, const char* value, Signiture * list, int listSize);
+int isLegal(request_rec *r, const char* key, const char* value, Signiture * list, int listSize);
 
 void showIllegalStr();
 
@@ -63,3 +64,5 @@ void showDetectionResult(request_rec *r, char * result);
 int readCurrentMode();
 
 void writeCurrentMode(int mode);
+
+void toLowerCase(char * str);

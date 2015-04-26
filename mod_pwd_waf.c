@@ -207,7 +207,7 @@ int checkGETParms(request_rec *r, Signiture * getSigList, int listSize){
 	int i = 0;
 	for (i = 0; i < parmsArray->nelts; i++) {
 		//ap_rprintf(r,"   \n key = %s, val = %s\n", getParms[i].key, getParms[i].val);
-		if(!isLegal(getParms[i].key, getParms[i].val, getSigList, listSize)){
+		if(!isLegal(r, getParms[i].key, getParms[i].val, getSigList, listSize)){
 			return ILLEGAL;
 		}
 	}
@@ -222,7 +222,7 @@ int checkPOSTParms(request_rec *r, Signiture * postSigList, int listSize){
         for (i = 0; &postParms[i]; i++) {
             if (postParms[i].key && postParms[i].value) {
                 //ap_rprintf(r, "%s = %s\n", postParms[i].key, postParms[i].value);
-                if(!isLegal(postParms[i].key, postParms[i].value, postSigList, listSize)){
+                if(!isLegal(r, postParms[i].key, postParms[i].value, postSigList, listSize)){
 					return ILLEGAL;
 				}
             }else{
@@ -242,7 +242,7 @@ int checkHEADERParms(request_rec *r, Signiture * headerSigList, int listSize){
     int i = 0;
     for(i = 0; i < header->nelts; i++) {
         //ap_rprintf(r, "%s: %s\n", headerParms[i].key, headerParms[i].val);
-        if(!isLegal(headerParms[i].key, headerParms[i].val, headerSigList, listSize)){
+        if(!isLegal(r, headerParms[i].key, headerParms[i].val, headerSigList, listSize)){
 				return ILLEGAL;
 		}
     }
@@ -250,11 +250,14 @@ int checkHEADERParms(request_rec *r, Signiture * headerSigList, int listSize){
 }
 
 // Returun 0 if illegal, return 1 is legal
-int isLegal(const char* key, const char* value, Signiture * list, int listSize){
+int isLegal(request_rec *r, const char* key, const char* value, Signiture * list, int listSize){
 	int i = 0;
 	for(i = 0; i < listSize; i++){
 		if(strcmp(list[i].key,"*")==0 || strcmp(list[i].key, key)==0){
-			if(strstr(value, list[i].value)!= NULL){
+			char * lowercaseValue =  apr_pstrdup(r->pool, value);
+			toLowerCase(lowercaseValue);
+			//ap_rprintf(r,"low--%s--\n", lowercaseValue);
+			if(strstr(lowercaseValue,list[i].value)!= NULL){
 				if(illegalStr == NULL){
 					illegalStr = (char *) calloc(0, SIGNITURE_BUFFER_SIZE);
 				}
@@ -390,4 +393,12 @@ void writeCurrentMode(int modeCode){
 	strcat(str,mode);
 	fprintf(f, "%s", str);
 	fclose(f);
+}
+
+void toLowerCase(char * str){
+    int len = strlen(str);
+    int i = 0;
+    for(i=0; i<len; i++){
+        str[i] = tolower(str[i]);
+    }
 }
