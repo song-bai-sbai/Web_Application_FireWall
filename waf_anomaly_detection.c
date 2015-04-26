@@ -169,14 +169,14 @@ int detectRequest(request_rec * r){
 	if(maxInDB == -1){
 		// The request is not store in DB, compare it with all pages max
 		maxInDB = select_max_parameter_num_all();
-		if(maxInDB <= currentMaxParamsNum){
+		if(maxInDB < currentMaxParamsNum){
 			// exceed max parameter number
 			return EXCEEDMAXPARAMNUM;
 		}else{
 			return PASSDETECTION;
 		}
 	}
-	if(maxInDB <= currentMaxParamsNum){
+	if(maxInDB < currentMaxParamsNum){
 		// exceed max parameter number
 		return EXCEEDMAXPARAMNUM;
 	}
