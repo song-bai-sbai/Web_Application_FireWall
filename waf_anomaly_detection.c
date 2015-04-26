@@ -77,6 +77,7 @@ void saveRequestInfo(request_rec *r){
 		}else{
 			// Update char set
 			updateCharSet(getParams[i].val, charSet);
+			//ap_rprintf(r,"new char set is %s--\n", charSet);
 			update_parameters_character_set(uri, getParams[i].key, charSet);
 		}
 	}
@@ -146,7 +147,7 @@ Params *getPostParms(request_rec *r, apr_off_t * postSize) {
         params[i].key = apr_pstrdup(r->pool, pair->name);
         params[i].val = buffer;
         params[i].length = strlen(buffer);
-        ap_rprintf(r,"key : val : len: is %s : %s : %d ===", params[i].key, params[i].val, params[i].length);
+        //ap_rprintf(r,"key : val : len: is %s : %s : %d ===", params[i].key, params[i].val, params[i].length);
         i++;
     }
     *postSize = i;
