@@ -42,6 +42,7 @@
 /* Web Application Firewall by Team Password */
 static int pwd_waf_handler(request_rec *r)
 {
+	return OK;
 	// Get current mode
 	MODE = readCurrentMode();
 
@@ -219,7 +220,7 @@ int checkPOSTParms(request_rec *r, Signiture * postSigList, int listSize){
         int i = 0;
         for (i = 0; &postParms[i]; i++) {
             if (postParms[i].key && postParms[i].value) {
-                ap_rprintf(r, "%s = %s\n", postParms[i].key, postParms[i].value);
+                //ap_rprintf(r, "%s = %s\n", postParms[i].key, postParms[i].value);
                 if(!isLegal(postParms[i].key, postParms[i].value, postSigList, listSize)){
 					return ILLEGAL;
 				}
