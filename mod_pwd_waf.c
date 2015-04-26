@@ -97,7 +97,7 @@ static int pwd_waf_handler(request_rec *r)
 	// Anomaly Detection
 	if(MODE == TRAINMODE){
 		// Do trainning
-		ap_rprintf(r,"This is Train Mode....");
+		//ap_rprintf(r,"This is Train Mode....");
 		saveRequestInfo(r);
 		writeCurrentMode(MODE);
 	}else if (MODE == GENERATEPROFILE){
@@ -109,7 +109,7 @@ static int pwd_waf_handler(request_rec *r)
 		writeCurrentMode(MODE);
 	}else{
 		// Detection MODE
-		ap_rprintf(r,"This is Detection Mode....");
+		//ap_rprintf(r,"This is Detection Mode....");
 		int result = PASSDETECTION;
 		result = detectRequest(r);
 		mysql_close(conn);
