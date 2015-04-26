@@ -19,6 +19,8 @@ static int PASSDETECTION = 4004;
 
 static int UNKNOWNPRARM = 4005;
 
+static int EXCEEDALLMAXNUM = 4006;
+
 Params * getGetParams(request_rec *r, apr_off_t * len);
 
 Params * getPostParms(request_rec *r, apr_off_t * postSize);
@@ -172,7 +174,7 @@ int detectRequest(request_rec * r){
 		maxInDB = select_max_parameter_num_all();
 		if(maxInDB < currentMaxParamsNum){
 			// exceed max parameter number
-			return EXCEEDMAXPARAMNUM;
+			return EXCEEDALLMAXNUM;
 		}else{
 			return PASSDETECTION;
 		}

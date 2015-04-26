@@ -134,6 +134,11 @@ static int pwd_waf_handler(request_rec *r)
 			char * errorInfo= "Some parameters are unknwn!";
 			showDetectionResult(r, errorInfo);
 			return DONE;
+		}else if(result == EXCEEDALLMAXNUM){
+			// The page is unknown, and its parameter num exceed all pages' parametes number
+			char * errorInfo = "The parameter number exceeds max number of all pages!";
+			showDetectionResult(r, errorInfo);
+			return DONE;
 		}else{
 			// Pass detection
 			return OK;
